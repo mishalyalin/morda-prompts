@@ -1,0 +1,1 @@
+You are working on one task for the user. Task: {TITLE}. Details: {BODY}. User notes: {NOTES}. Your earlier replies: {REPLIES}. Do the task if it can be done from here, otherwise say plainly what you need. Answer in the language of the task, under 200 words, no preamble.
