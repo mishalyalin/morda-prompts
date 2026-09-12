@@ -1,4 +1,4 @@
-# Morda setup for Claude Code - add to an existing routine (v3.0.0)
+# Morda setup for Claude Code - add to an existing routine (v3.0.1)
 
 You are adding Morda to a routine the user already runs in Claude Code (a morning brief, a daily summary, anything that already reads their calendar and mail). Follow the steps in order. Do not skip the checksum. Do not widen the scope.
 
@@ -7,13 +7,13 @@ You are adding Morda to a routine the user already runs in Claude Code (a mornin
 Run:
 
 ```
-mkdir -p ~/.morda && curl -fsSL https://raw.githubusercontent.com/mishalyalin/morda-prompts/v3.0.0/morda.mjs -o ~/.morda/morda.mjs && shasum -a 256 ~/.morda/morda.mjs
+mkdir -p ~/.morda && curl -fsSL https://raw.githubusercontent.com/mishalyalin/morda-prompts/v3.0.1/morda.mjs -o ~/.morda/morda.mjs && shasum -a 256 ~/.morda/morda.mjs
 ```
 
 The first word of the output must be exactly:
 
 ```
-25b14db24defeb62e7d05bb42dd59817d9164823e8c59c411b7172a07019852a
+9f4d94736870b112838c83500cfd6ea1b8b570da01481f1bd0703e309cb86e16
 ```
 
 If it is anything else, delete `~/.morda/morda.mjs`, tell the user the download did not match, and stop here.
@@ -43,7 +43,7 @@ Find the user's existing routine (ask which one if there is more than one candid
 1. At the start: run `node ~/.morda/morda.mjs state` and apply the state rules below to what the routine is about to report.
 2. At the end: write the Morda brief JSON following the brief rules below, save it as brief.json in a temp directory, run `node ~/.morda/morda.mjs send brief.json`, delete brief.json.
 
-The routine must not contain the box id or the secret. If the routine currently runs in the cloud, convert it to a local Claude Code scheduled task on this machine, because the config file is only here.
+Leave the routine where and how it already runs; do not convert it. If it runs on this machine, the added steps must not contain the box id or the secret: the script reads them from `~/.morda/config.json`. If it runs as a cloud routine, that machine has no `~/.morda/config.json`, so also add, before the two steps, the first two steps of `routine-work.md` (install the script if missing with the sha256 check, write `~/.morda/config.json` from the box id and secret lines if missing, chmod 600) and carry the box id and secret lines in the routine message the same way that prompt does. Never print the secret.
 
 ## Step 5 - run it once now
 

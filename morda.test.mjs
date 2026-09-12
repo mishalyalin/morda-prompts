@@ -5,11 +5,12 @@ import { randomBytes, createHash } from "node:crypto";
 import { readFileSync, writeFileSync, mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import {
   VERSION, WORK_PROMPT, REPLY_MAX_CHARS, REPLIES_MAX,
   b64urlEncode, b64urlDecode, derive, aad, encrypt, decrypt,
   resolveConfig, makeClient, selectPending, capReplies, mergeReply, fillWorkPrompt, newestTs, toMs, postReply,
+  requestTs, readHandled, alreadyHandled, watchStatePath,
 } from "./morda.mjs";
 
 const HERE = new URL(".", import.meta.url).pathname;
@@ -72,11 +73,11 @@ test("resolveConfig: missing -> not configured; short secret rejected", () => {
 
 // ---- client ----
 
-test("makeClient: bearer auth, 404 -> null, 409 surfaces, put returns seq", async () => {
+test("makeClient: bearer auth, 'no blob yet' 404 -> null, 409 surfaces, put returns seq", async () => {
   const calls = [];
   const fetchFn = async (url, init) => {
     calls.push({ url, init });
-    if (url.endsWith("/state")) return { status: 404, ok: false, text: async () => "" };
+    if (url.endsWith("/state")) return { status: 404, ok: false, text: async () => JSON.stringify({ detail: "no blob yet" }) };
     if (url.endsWith("/brief") && init.method === "PUT") {
       const body = JSON.parse(init.body);
       if (body.seq !== 2) return { status: 409, ok: false, text: async () => JSON.stringify({ current: 1 }) };
@@ -93,6 +94,33 @@ test("makeClient: bearer auth, 404 -> null, 409 surfaces, put returns seq", asyn
   assert.ok(calls[0].url.startsWith("https://x.example/brief/v2/boxes/b1/"));
   const put = JSON.parse(calls.at(-1).init.body);
   assert.deepEqual(decrypt(key, aad("b1", "brief", 2), put.blob), { x: 1 });
+});
+
+test("makeClient: bare 404 and 401 are errors naming the URL, never null", async () => {
+  const c = makeClient(resolveConfig(envAll, cfgPath), async (url) => (
+    url.endsWith("/brief") ? { status: 404, ok: false, text: async () => "<html>nginx 404</html>" } : { status: 401, ok: false, text: async () => JSON.stringify({ detail: "invalid box or token" }) }));
+  await assert.rejects(c.get("brief"), /^Error: box not found or wrong URL \(404 https:\/\/x\.example\/brief\/v2\/boxes\/b1\/brief\)$/);
+  await assert.rejects(c.get("state"), /^Error: box not found or wrong secret \(401 https:\/\/x\.example\/brief\/v2\/boxes\/b1\/state\)$/);
+  await assert.rejects(c.seq("state"), /401/);
+});
+
+test("cli: state on a bare 404 exits 1 with the box-not-found error, not a crash", async () => {
+  const { createServer } = await import("node:http");
+  const srv = createServer((req, res) => { res.statusCode = 404; res.end("not here"); });
+  await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+  try {
+    const env = { PATH: process.env.PATH, HOME: join(tmp, "nohome"), MORDA_URL: `http://127.0.0.1:${srv.address().port}/brief`, MORDA_BOX: "b1", MORDA_SECRET: b64urlEncode(SECRET) };
+    // spawn, not spawnSync: the 404 server lives in this process and must keep serving while the CLI runs.
+    const r = await new Promise((resolve) => {
+      const ch = spawn(process.execPath, [join(HERE, "morda.mjs"), "state"], { env });
+      let stdout = "", stderr = "";
+      ch.stdout.on("data", (d) => (stdout += d)); ch.stderr.on("data", (d) => (stderr += d));
+      ch.on("close", (status) => resolve({ status, stdout, stderr }));
+    });
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /^morda: box not found or wrong URL \(404 http:\/\/127\.0\.0\.1:\d+\/brief\/v2\/boxes\/b1\/state\)\n$/);
+    assert.equal(r.stdout, "");
+  } finally { srv.close(); }
 });
 
 test("postReply: retries once on 409 with a fresh read", async () => {
@@ -116,6 +144,50 @@ test("postReply: retries once on 409 with a fresh read", async () => {
   assert.equal(puts, 2);
 });
 
+test("postReply: a note typed while Claude worked stays pending when `after` is the pre-work value", async () => {
+  const cfg = resolveConfig(envAll, cfgPath);
+  const brief = { items: [{ id: "t1", kind: "task", title: "T" }] };
+  // At pending time the item had one note (ts 1000). While Claude worked, the user typed another (ts 5000).
+  const state = { items: { t1: { status: "work", work_ts: 500, notes: [{ ts: 1000, text: "first" }, { ts: 5000, text: "typed during the job" }] } } };
+  let stored;
+  const fetchFn = async (url, init) => {
+    if (init.method === "GET" && url.endsWith("/brief")) return { status: 200, ok: true, text: async () => JSON.stringify({ seq: 1, blob: encrypt(cfg.keys.brief, aad("b1", "brief", 1), brief) }) };
+    if (init.method === "GET" && url.endsWith("/state")) return { status: 200, ok: true, text: async () => JSON.stringify({ seq: 3, blob: encrypt(cfg.keys.state, aad("b1", "state", 3), state) }) };
+    const body = JSON.parse(init.body); stored = decrypt(cfg.keys.brief, aad("b1", "brief", body.seq), body.blob);
+    return { status: 200, ok: true, text: async () => JSON.stringify({ seq: body.seq }) };
+  };
+  const pendingBefore = selectPending(brief, { items: { t1: { ...state.items.t1, notes: state.items.t1.notes.slice(0, 1) } } });
+  assert.equal(pendingBefore[0].after, 1000);
+  await postReply(makeClient(cfg, fetchFn), "t1", "done", { after: pendingBefore[0].after });
+  assert.equal(stored.items[0].replies[0].ts, 1001);
+  const still = selectPending(stored, state);
+  assert.equal(still.length, 1, "the note typed during the job must remain pending");
+  assert.equal(still[0].after, 5000);
+  // Without `after` the reply lands past the newest note at reply time and the second note is swallowed.
+  await postReply(makeClient(cfg, fetchFn), "t1", "done");
+  assert.equal(stored.items[0].replies.at(-1).ts, 5001);
+  assert.equal(selectPending(stored, state).length, 0);
+});
+
+test("requestTs: newest note, or the Work mark when there are no notes", () => {
+  assert.equal(requestTs({ work_ts: 7, notes: [] }), 7);
+  assert.equal(requestTs({ ts: 9 }), 9);
+  assert.equal(requestTs({ work_ts: 7, notes: [{ ts: 20 }] }), 20);
+  assert.equal(requestTs(undefined), 0);
+});
+
+test("watch persistence: readHandled tolerates a missing file; alreadyHandled skips only non-newer requests", () => {
+  assert.deepEqual(readHandled(join(tmp, "nope.json")), {});
+  writeFileSync(join(tmp, "w.json"), JSON.stringify({ a: 1000 }));
+  const h = readHandled(join(tmp, "w.json"));
+  assert.equal(alreadyHandled(h, { id: "a", after: 1000 }), true);
+  assert.equal(alreadyHandled(h, { id: "a", after: 999 }), true);
+  assert.equal(alreadyHandled(h, { id: "a", after: 1001 }), false);
+  assert.equal(alreadyHandled(h, { id: "b", after: 0 }), false);
+  assert.equal(alreadyHandled({}, { id: "a", after: 0 }), false);
+  assert.match(watchStatePath("abc"), /\.morda[\/\\]watch-abc\.json$/);
+});
+
 // ---- pure logic ----
 
 test("toMs / newestTs tolerate numbers, ISO strings and junk", () => {
@@ -128,11 +200,12 @@ test("toMs / newestTs tolerate numbers, ISO strings and junk", () => {
   assert.equal(newestTs([{ ts: 3 }, null, { ts: "1970-01-01T00:00:01Z" }, {}]), 1000);
 });
 
-test("selectPending: work item without reply is pending", () => {
+test("selectPending: work item without reply is pending and carries after = its Work mark", () => {
   const out = selectPending({ items: [{ id: "a", title: "A", body: "b" }] }, { items: { a: { status: "work", ts: 1 } } });
   assert.equal(out.length, 1);
   assert.equal(out[0].title, "A");
   assert.equal(out[0].body, "b");
+  assert.equal(out[0].after, 1);
 });
 
 test("selectPending: replied item with no newer note is not pending", () => {
@@ -187,9 +260,11 @@ test("mergeReply: caps text at REPLY_MAX_CHARS and replies at REPLIES_MAX", () =
   assert.equal(out.items[0].replies.at(-1).text.length, REPLY_MAX_CHARS);
 });
 
-test("mergeReply: reply ts is after the note it answers even if the clock is behind", () => {
+test("mergeReply: reply ts is just past the request it answers, whatever the clock says", () => {
   const out = mergeReply({ items: [{ id: "a" }] }, "a", "r", { now: 100, after: 5000 });
   assert.equal(out.items[0].replies[0].ts, 5001);
+  assert.equal(mergeReply({ items: [{ id: "a" }] }, "a", "r", { now: 9000, after: 5000 }).items[0].replies[0].ts, 5001);
+  assert.equal(mergeReply({ items: [{ id: "a" }] }, "a", "r", { now: 9000 }).items[0].replies[0].ts, 9000);
   const pending = selectPending(out, { items: { a: { status: "work", notes: [{ ts: 5000, text: "n" }] } } });
   assert.equal(pending.length, 0);
 });

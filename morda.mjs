@@ -5,22 +5,26 @@
 //   node morda.mjs send brief.json              encrypts brief.json and uploads it
 //   node morda.mjs brief                        prints the current brief as JSON
 //   node morda.mjs pending                      prints the items you handed to Claude that still need a reply
-//   node morda.mjs reply <id> --file <path>     appends a reply to that item (or pipe the text on stdin)
+//   node morda.mjs reply <id> --file <path> [--after <ms>]
+//                                               appends a reply to that item (or pipe the text on stdin);
+//                                               --after = the item's "after" value printed by pending
 //   node morda.mjs watch [--interval 30] [--claude <path>] [--prompt <path>]
 //                                               loop: run pending items through Claude Code, post the replies
 //
 // Config, first one wins per field: env MORDA_URL / MORDA_BOX / MORDA_SECRET, then ~/.morda/config.json
 // ({"url": ..., "box": ..., "secret": ...}, chmod 600). Nothing else is ever read or written, except the
-// files you name on the command line.
+// files you name on the command line and, for watch only, ~/.morda/watch-<box>.json (which items it
+// already handled, so a restart never repeats a job).
 import { hkdfSync, createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
 
-export const VERSION = "3.0.0";
+export const VERSION = "3.0.1";
 export const CONFIG_PATH = join(homedir(), ".morda", "config.json");
+export const watchStatePath = (box) => join(homedir(), ".morda", `watch-${box}.json`);
 // Kept identical to prompts/work-prompt.md (morda.test.mjs checks). {TITLE} {BODY} {NOTES} {REPLIES} are filled per item.
 export const WORK_PROMPT =
   "You are working on one task for the user. Task: {TITLE}. Details: {BODY}. User notes: {NOTES}. Your earlier replies: {REPLIES}. Do the task if it can be done from here, otherwise say plainly what you need. Answer in the language of the task, under 200 words, no preamble.";
@@ -82,14 +86,19 @@ export function makeClient({ url, box, keys }, fetchFn = fetch) {
       headers: { Authorization: `Bearer ${keys.auth}`, "Content-Type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    if (r.status === 404) return null;
     const text = await r.text();
+    // The server answers 404 {"detail":"no blob yet"} for a box that exists but has nothing of this kind yet;
+    // any other 404 (wrong URL, unknown route) or a 401 (unknown box or wrong secret) is a real error.
+    if (r.status === 404 && /no blob yet/.test(text)) return null;
+    const full = `${url}/v2/boxes/${box}${path}`;
+    if (r.status === 404) throw new Error(`box not found or wrong URL (404 ${full})`);
+    if (r.status === 401) throw new Error(`box not found or wrong secret (401 ${full})`);
     if (!r.ok) throw new Error(`${method} ${path} -> HTTP ${r.status}: ${text.slice(0, 300)}`);
     return text ? JSON.parse(text) : {};
   }
   return {
     box,
-    // { seq, doc } or null when the box has no blob of this kind yet
+    // { seq, doc }; null only when the server says the box exists but has no blob of this kind yet
     async get(kind) {
       const row = await api("GET", `/${kind}`);
       return row ? { seq: row.seq, doc: decrypt(keys[kind], aad(box, kind, row.seq), row.blob) } : null;
@@ -114,6 +123,9 @@ export function newestTs(arr) {
 }
 
 // Which state items (status "work") still need a reply: no reply yet, or a note newer than the last reply.
+// Each item carries "after" = the ts of the request it was selected for (newest note, or the Work mark if
+// there are no notes). Pass it back to reply/postReply: the reply is stamped just past that moment, so a
+// note typed while Claude was working is newer than the reply and stays pending instead of being swallowed.
 export function selectPending(brief, state) {
   const briefItems = new Map(((brief && brief.items) || []).filter((i) => i && i.id).map((i) => [i.id, i]));
   const out = [];
@@ -123,16 +135,20 @@ export function selectPending(brief, state) {
     const b = briefItems.get(id);
     const replies = b && Array.isArray(b.replies) ? b.replies : [];
     if (replies.length && newestTs(notes) <= newestTs(replies)) continue;
-    out.push({ id, title: (b && b.title) || it.title || id, body: (b && b.body) || null, status: it.status, work_ts: it.work_ts || it.ts || null, notes, replies });
+    out.push({ id, title: (b && b.title) || it.title || id, body: (b && b.body) || null, status: it.status, work_ts: it.work_ts || it.ts || null, notes, replies, after: requestTs(it, notes) });
   }
   return out;
 }
 
+export function requestTs(it, notes = it && it.notes) { return Math.max(newestTs(notes), toMs(it && (it.work_ts || it.ts))); }
+
 export function capReplies(replies, max = REPLIES_MAX) { return replies.length > max ? replies.slice(replies.length - max) : replies.slice(); }
 
 // New brief with `text` appended to item `id`'s replies (a "task" stub is created for a user-created id
-// that is not in the brief yet). The reply's ts is forced past `after` (the newest note it answers), so a
-// phone clock that runs ahead of this machine can never make the same note look unanswered forever.
+// that is not in the brief yet). The reply's ts is `after` + 1 (just past the note or Work mark it answers),
+// not the wall clock: a note typed after `after` stays newer than the reply, and a phone clock that runs
+// ahead of this machine can never make the same note look unanswered forever. `now` is used only when
+// there is nothing to answer (after = 0).
 export function mergeReply(brief, id, text, { ackedStateSeq, fallbackTitle, now = Date.now(), after = 0 } = {}) {
   const items = ((brief && brief.items) || []).map((i) => ({ ...i }));
   let idx = items.findIndex((i) => i && i.id === id);
@@ -140,7 +156,7 @@ export function mergeReply(brief, id, text, { ackedStateSeq, fallbackTitle, now 
     items.push({ id, kind: "task", title: fallbackTitle || id, body: null, url: null, due: null, priority: 3, source: "note" });
     idx = items.length - 1;
   }
-  const reply = { ts: Math.max(now, after + 1), text: String(text).slice(0, REPLY_MAX_CHARS) };
+  const reply = { ts: after > 0 ? after + 1 : now, text: String(text).slice(0, REPLY_MAX_CHARS) };
   items[idx].replies = capReplies([...(Array.isArray(items[idx].replies) ? items[idx].replies : []), reply]);
   const out = { ...brief, items };
   if (ackedStateSeq !== undefined) out.acked_state_seq = ackedStateSeq;
@@ -188,13 +204,16 @@ async function pendingItems(c) {
 
 async function cmdPending(c) { console.log(JSON.stringify(await pendingItems(c), null, 2)); }
 
-// Re-reads the brief and retries once if someone else bumped the seq in between.
-export async function postReply(c, id, text) {
+// Re-reads the brief and retries once if someone else bumped the seq in between. `after` must be the
+// item's "after" from BEFORE the work started (the field pending printed): the reply is placed just past
+// that note or Work mark, so a note typed during the job is newer than the reply and stays pending.
+// Without it the request ts at reply time is used, which assumes the caller read the notes just now.
+export async function postReply(c, id, text, { after } = {}) {
   for (let attempt = 0; ; attempt++) {
     const [b, s] = await Promise.all([c.get("brief"), c.get("state")]);
     if (!b) throw new Error("no brief yet");
     const it = s && s.doc.items ? s.doc.items[id] : undefined;
-    const updated = mergeReply(b.doc, id, text, { ackedStateSeq: s ? s.seq : undefined, fallbackTitle: it && it.title, after: newestTs(it && it.notes) });
+    const updated = mergeReply(b.doc, id, text, { ackedStateSeq: s ? s.seq : undefined, fallbackTitle: it && it.title, after: after === undefined ? requestTs(it) : toMs(after) });
     try { return await c.put("brief", b.seq + 1, updated); }
     catch (e) { if (attempt === 0 && /HTTP 409/.test(e.message)) continue; throw e; }
   }
@@ -214,8 +233,10 @@ async function readReplyText(args) {
 }
 
 async function cmdReply(c, id, args) {
-  if (!id) throw new Error("usage: node morda.mjs reply <id> --file <path>");
-  const seq = await postReply(c, id, await readReplyText(args));
+  if (!id) throw new Error("usage: node morda.mjs reply <id> --file <path> [--after <ms>]");
+  const afterArg = opt(args, "--after");
+  if (args.includes("--after") && !/^\d+$/.test(afterArg || "")) throw new Error("--after takes the item's \"after\" number printed by pending");
+  const seq = await postReply(c, id, await readReplyText(args), afterArg === undefined ? {} : { after: Number(afterArg) });
   console.log(`replied ${id} brief seq=${seq}`);
 }
 
@@ -231,6 +252,17 @@ function runClaude(claudePath, promptText) {
   });
 }
 
+// Watch persistence: { <item id>: <newest note ts the last handled run was selected with> }. An item whose
+// "after" is not newer than the stored value was already answered by an earlier run of this watcher.
+export function readHandled(path) {
+  try { const h = JSON.parse(readFileSync(path, "utf8")); return h && typeof h === "object" ? h : {}; } catch { return {}; }
+}
+export function alreadyHandled(handled, item) { return Object.hasOwn(handled || {}, item.id) && toMs(item.after) <= toMs(handled[item.id]); }
+function writeHandled(path, handled) {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify(handled), { mode: 0o600 });
+}
+
 async function cmdWatch(c, args) {
   const interval = Number(opt(args, "--interval") || 30);
   if (!(interval >= 5)) throw new Error("--interval must be at least 5 seconds");
@@ -238,16 +270,20 @@ async function cmdWatch(c, args) {
   const promptPath = opt(args, "--prompt");
   const template = promptPath ? readFileSync(promptPath, "utf8").trim() : WORK_PROMPT;
   const failedAt = new Map();
+  const statePath = watchStatePath(c.box);
+  const handled = readHandled(statePath);
   log(`watching box ${c.box.slice(0, 8)}... every ${interval}s (claude: ${claudePath})`);
   for (;;) {
     try {
       for (const item of await pendingItems(c)) {
+        if (alreadyHandled(handled, item)) continue;
         if (Date.now() - (failedAt.get(item.id) || 0) < RETRY_FAILED_MS) continue;
         log(`working on ${item.id}`);
         try {
           const text = await runClaude(claudePath, fillWorkPrompt(template, item));
           if (!text) throw new Error("claude returned an empty reply");
-          const seq = await postReply(c, item.id, text);
+          const seq = await postReply(c, item.id, text, { after: item.after });
+          handled[item.id] = item.after; writeHandled(statePath, handled);
           failedAt.delete(item.id);
           log(`replied ${item.id} (brief seq=${seq})`);
         } catch (e) {
@@ -262,7 +298,7 @@ async function cmdWatch(c, args) {
   }
 }
 
-const USAGE = "usage: node morda.mjs state | send brief.json | brief | pending | reply <id> --file <path> | watch [--interval 30] [--claude <path>] [--prompt <path>]";
+const USAGE = "usage: node morda.mjs state | send brief.json | brief | pending | reply <id> --file <path> [--after <ms>] | watch [--interval 30] [--claude <path>] [--prompt <path>]";
 
 export async function main(argv) {
   const [cmd, ...rest] = argv;

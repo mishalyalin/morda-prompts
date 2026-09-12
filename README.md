@@ -6,14 +6,14 @@ Morda is a small blind mailbox between your own Claude and a phone app. Your Cla
 
 1. In the app, create a box and copy the setup prompt (it carries your box id and secret).
 2. Paste it into Claude Code; it follows `prompts/claude-code-e2e.md`, installs `~/.morda/morda.mjs`, checks its sha256, writes `~/.morda/config.json` and sends the first brief.
-3. Open the app: the brief is there, and a daily local routine keeps it coming.
+3. Open the app: the brief is there, and a daily routine keeps it coming. Optional: paste the task routine prompt as a scheduled cloud routine every 15 minutes, and the tasks you hand to Claude get answered even while the laptop is closed.
 
 ## Security model in plain words
 
 - The secret is created on your phone and typed into Claude Code once. It is stored in `~/.morda/config.json` (mode 600) and nowhere else.
 - Everything uploaded is AES-256-GCM encrypted with keys derived from the secret. The server sees a box id, ciphertext and a derived login token. It cannot read a brief or a mark.
 - The script has no dependencies and talks to exactly one URL, the one in your config. `spec/protocol.md` is the whole wire format.
-- The prompts tell Claude to verify the script's sha256 against the value printed in the prompt at this tag, and to never print or store the secret anywhere but the config file.
+- The prompts tell Claude to verify the script's sha256 against the value printed in the prompt at this tag, and to never print or store the secret anywhere but the config file. The cloud task routine is the one place the secret travels beyond that file: its routine message carries the box id and secret so the routine can write the config on the machine it runs on.
 
 ## Files
 
@@ -23,7 +23,7 @@ Morda is a small blind mailbox between your own Claude and a phone app. Your Cla
 | `morda.test.mjs` | `node --test morda.test.mjs` |
 | `prompts/claude-code-e2e.md` | first-time setup (install, config, first brief, daily routine) |
 | `prompts/claude-code-e2e-existing.md` | add Morda to a routine you already run |
-| `prompts/routine-work.md` | optional 15-minute routine that answers tasks you hand to Claude |
+| `prompts/routine-work.md` | optional cloud routine (every 15 minutes) that answers tasks you hand to Claude, laptop open or closed |
 | `prompts/work-prompt.md` | the one-line prompt used per task by `watch` |
 | `spec/brief.md` | what a brief contains and its JSON shape |
 | `spec/state.md` | what the app sends back |
@@ -33,6 +33,7 @@ Morda is a small blind mailbox between your own Claude and a phone app. Your Cla
 
 | tag | script sha256 | notes |
 |-----|---------------|-------|
+| v3.0.1 | `9f4d94736870b112838c83500cfd6ea1b8b570da01481f1bd0703e309cb86e16` | task routine runs in the cloud again; replies never swallow a note typed meanwhile; clear errors on a wrong URL or secret; watch remembers what it handled |
 | v3.0.0 | `25b14db24defeb62e7d05bb42dd59817d9164823e8c59c411b7172a07019852a` | first public release |
 
 MIT, see `LICENSE`.

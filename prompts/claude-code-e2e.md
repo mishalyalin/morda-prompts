@@ -1,4 +1,4 @@
-# Morda setup for Claude Code (v3.0.0)
+# Morda setup for Claude Code (v3.0.1)
 
 You are setting up Morda for the user who pasted this link. Follow the steps in order. Do not skip the checksum. Do not widen the scope: no extra tools, no extra files, no changes elsewhere.
 
@@ -7,13 +7,13 @@ You are setting up Morda for the user who pasted this link. Follow the steps in 
 Run:
 
 ```
-mkdir -p ~/.morda && curl -fsSL https://raw.githubusercontent.com/mishalyalin/morda-prompts/v3.0.0/morda.mjs -o ~/.morda/morda.mjs && shasum -a 256 ~/.morda/morda.mjs
+mkdir -p ~/.morda && curl -fsSL https://raw.githubusercontent.com/mishalyalin/morda-prompts/v3.0.1/morda.mjs -o ~/.morda/morda.mjs && shasum -a 256 ~/.morda/morda.mjs
 ```
 
 The first word of the output must be exactly:
 
 ```
-25b14db24defeb62e7d05bb42dd59817d9164823e8c59c411b7172a07019852a
+9f4d94736870b112838c83500cfd6ea1b8b570da01481f1bd0703e309cb86e16
 ```
 
 If it is anything else, delete `~/.morda/morda.mjs`, tell the user the download did not match, and stop here.
@@ -42,7 +42,7 @@ Run the brief prompt below once, right now, as your own task in this session. Wh
 
 ## Step 5 - make it daily
 
-Create a Claude Code scheduled task on this machine named `Morning brief` that runs every day at 07:00 local time and whose task text is exactly the brief prompt below (between BEGIN PROMPT and END PROMPT, without those markers). The task must not contain the box id or the secret - the script reads them from `~/.morda/config.json`. Do not use a cloud routine: the config file is only on this machine.
+Create a Claude Code scheduled routine named `Morning brief` that runs every day at 07:00 in the user's time zone and whose task text is exactly the brief prompt below (between BEGIN PROMPT and END PROMPT, without those markers). The routine text must not contain the box id or the secret: the script reads them from `~/.morda/config.json`, so the routine runs where that file is. If the user wants a routine somewhere else (a cloud routine), do it the way `routine-work.md` does: its message carries the box id and secret lines and its first two steps install the script and write the config when they are missing.
 
 Confirm to the user in one line: brief sent, daily task created, nothing else stored.
 
