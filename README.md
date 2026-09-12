@@ -1,12 +1,20 @@
 # Morda prompts
 
+## Nothing to install: relay mode
+
+Since v3.1 the default way to use Morda needs nothing on your computer. You add one connector URL to Claude.ai, ChatGPT (Developer mode + scheduled tasks) or Claude Code, paste one prompt, and create one routine that runs every 15 minutes if your assistant allows it, otherwise as often as it allows (hourly is fine). The routine calls the connector's `get_pending` tool, answers the tasks you pressed Work on, and posts each answer with `reply_task`; the app shows the reply on the routine's next run. Nothing runs on your laptop, and nothing in this repo is needed for it: the prompts come from the app itself. In relay mode the Morda server stores your brief and tasks in plain text so your assistant can read and answer them.
+
+The rest of this repo is the encrypted option below, for Claude Code only: the server stores ciphertext it cannot open, at the price of a script that Claude Code fetches where it runs.
+
+## Encrypted mode
+
 Morda is a small blind mailbox between your own Claude and a phone app. Your Claude writes a morning brief, encrypts it and drops it in a box; the app decrypts it, and your done/later/work marks travel back the same way. The server in between stores ciphertext only and never holds the secret. This repo holds the prompts you paste into Claude Code, the client script they install, and the specs both sides follow. Read them before you paste - that is the point of keeping them public.
 
 ## Pairing
 
 1. In the app, create a box and copy the setup prompt (it carries your box id and secret).
 2. Paste it into Claude Code; it follows `prompts/claude-code-e2e.md`, installs `~/.morda/morda.mjs`, checks its sha256, writes `~/.morda/config.json` and sends the first brief.
-3. Open the app: the brief is there, and a daily routine keeps it coming. Optional: paste the task routine prompt as a scheduled cloud routine every 15 minutes, and the tasks you hand to Claude get answered even while the laptop is closed.
+3. Open the app: the brief is there, and a daily routine keeps it coming. Paste the task routine prompt as a scheduled cloud routine every 15 minutes, and the tasks you hand to Claude get answered with nothing running on your computer. The laptop `watch` command is optional, for people who want answers within a minute while their laptop is open.
 
 ## Security model in plain words
 
@@ -23,8 +31,8 @@ Morda is a small blind mailbox between your own Claude and a phone app. Your Cla
 | `morda.test.mjs` | `node --test morda.test.mjs` |
 | `prompts/claude-code-e2e.md` | first-time setup (install, config, first brief, daily routine) |
 | `prompts/claude-code-e2e-existing.md` | add Morda to a routine you already run |
-| `prompts/routine-work.md` | optional cloud routine (every 15 minutes) that answers tasks you hand to Claude, laptop open or closed |
-| `prompts/work-prompt.md` | the one-line prompt used per task by `watch` |
+| `prompts/routine-work.md` | cloud routine (every 15 minutes) that answers tasks you hand to Claude, nothing running on your computer |
+| `prompts/work-prompt.md` | the one-line prompt used per task by `watch`, the optional laptop watcher for answers within a minute while the laptop is open |
 | `spec/brief.md` | what a brief contains and its JSON shape |
 | `spec/state.md` | what the app sends back |
 | `spec/protocol.md` | keys, encryption, endpoints, seq, retention |

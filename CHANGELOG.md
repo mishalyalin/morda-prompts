@@ -1,5 +1,12 @@
 # Changelog
 
+## v3.1.0 - 2026-09-12 (docs only, no tag)
+
+- README gets a top section "Nothing to install: relay mode": Claude.ai, ChatGPT and Claude Code answer tasks through the connector with `get_pending` + `reply_task` on a routine that runs every 15 minutes if the assistant allows it, otherwise as often as it allows. Nothing runs on the user's computer; the prompts come from the app.
+- The encrypted mode (this repo's script and prompts) is documented as the option below relay mode, for Claude Code only.
+- The laptop `watch` is demoted to optional, for people who want answers within a minute while their laptop is open. The cloud routine is the normal path.
+- `morda.mjs`, `prompts/*.md` and `spec/*.md` are unchanged; the pinned tag stays v3.0.1 and the sha256 `9f4d94736870b112838c83500cfd6ea1b8b570da01481f1bd0703e309cb86e16` still applies.
+
 ## v3.0.1 - 2026-09-12
 
 - `prompts/routine-work.md` is a Claude Code cloud routine again (every 15 minutes, works with the laptop closed): each run installs the script if missing (pinned URL + sha256), writes `~/.morda/config.json` from the routine message if missing, answers what `pending` prints, stops when empty. The laptop `watch` stays the fast path.
