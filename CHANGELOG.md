@@ -1,5 +1,13 @@
 # Changelog
 
+## v4.0.0 - 2026-09-15 (no tag; pinned by commit SHA)
+
+- One link replaces the copy-paste setup: the Morda server serves `prompts/morda.md` at `/m/<key>` (setup), `/m/<key>/full` (routine with brief) and `/m/<key>/tasks` (routine without brief), with the key and the specs filled in. Claude Code gets one line from the app, the user presses send.
+- `prompts/_brief-spec.md` is the v4 brief: CEO lens, tasks, feed, architect lens, three questions, options for the day, silent contacts over 7 days. Zero items are allowed; day one without connectors still posts a brief.
+- `prompts/_send-spec.md` maps a brief you already write into the Morda shape; `prompts/_state-rules.md` explains done, later, dismissed, work, user tasks and notes.
+- `CONTRIBUTING.md`, `prompts.test.mjs` and a GitHub Actions workflow running `node --test` on every push and pull request.
+- The e2e prompts and `morda.mjs` are unchanged.
+
 ## v3.1.0 - 2026-09-12 (docs only, no tag)
 
 - README gets a top section "Nothing to install: relay mode": Claude.ai, ChatGPT and Claude Code answer tasks through the connector with `get_pending` + `reply_task` on a routine that runs every 15 minutes if the assistant allows it, otherwise as often as it allows. Nothing runs on the user's computer; the prompts come from the app.
