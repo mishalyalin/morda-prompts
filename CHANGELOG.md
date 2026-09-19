@@ -1,5 +1,12 @@
 # Changelog
 
+## v5.0.0 - 2026-09-19 (no tag; pinned by commit SHA)
+
+- Two variants instead of three: `/m/<key>` (setup) and `/m/<key>/routine` (routine). `/full` and `/tasks` answer 410. Every variant says where its public text lives (`{PROMPTS_URL}`).
+- The setup variant writes the first brief and creates one cloud routine named "Morda", every 15 minutes or as often as the account allows; it deletes a leftover "Morda tasks" routine. The routine variant never creates routines.
+- Three reactions in the app: Done, Snooze (a week) and Reply. Work, Later and Dismiss are gone from the prompts. The routine reads `events` (done, undone, snoozed, unsnoozed, each with the item's kind) from `/v1/pending`, records them and acknowledges them with `/v1/events/ack`, then answers `pending` replies.
+- Every brief section entry (CEO line, question, silent contact, options for the day, architect line) is an item in the app with the same three reactions; `_brief-spec.md`, `_send-spec.md` and `_state-rules.md` say so. `_state-rules.md` explains `snoozed` / `snoozed_until` and drops `later` and the `Q:` user task.
+
 ## v4.0.0 - 2026-09-15 (no tag; pinned by commit SHA)
 
 - One link replaces the copy-paste setup: the Morda server serves `prompts/morda.md` at `/m/<key>` (setup), `/m/<key>/full` (routine with brief) and `/m/<key>/tasks` (routine without brief), with the key and the specs filled in. Claude Code gets one line from the app, the user presses send.

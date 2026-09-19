@@ -1,7 +1,7 @@
-Apply what the state says:
-- "done": do not list that task again. If it is genuinely still relevant, mention it in one feed line at most.
+Apply what the state says. Every entry carries the item's "kind": "task" (a task), "ceo" (a CEO line), "question", "silent" (a silent contact), "options" (the options for the day) or "architect".
+- "done": do not list that item again. By kind: a "task" or "ceo" line is finished; a "question" is answered, never ask it again; a "silent" contact was handled, do not list that person as silent again for 7 days; "options" means I chose a mode for that day; an "architect" suggestion was acknowledged, do not repeat it. If a done task is genuinely still relevant, mention it in one feed line at most.
 - "dismissed": never show that item again, under any id.
-- "later": skip that task until its "later_until" date (my local timezone). Once that day comes, treat it like any open task.
-- "work": a task I handed to you, not a task for me. Keep it in the brief as a task with the same id so the thread stays intact, and do not repeat a reply you already gave; answering it is the routine's job, not the brief's.
-- "user_tasks": an id that starts with "u-" is a task I typed in the app. Echo every one whose status is not "dismissed" into the brief as a task with the same id and title, even if you have nothing to add. A user task whose title starts with "Q:" is a question from my brief that I answered; its note is my answer. Read it and do not ask that question again.
-- "notes": things I wrote to you about a task from the app, newest last. Read them as instructions or context for that task.
+- "snoozed": the user pushed that item away for a week. Do not list it before its "snoozed_until" time; after that, treat it like any open item. A snoozed "silent" contact stays out of the silent list until then.
+- "work": an item the user replied to from the app. Keep it in the brief with the same id (a task) or the same title (a section entry) so the thread stays intact; answering it is the routine's job, not the brief's.
+- "user_tasks": an id that starts with "u-" is a task I typed in the app. Echo every one whose status is not "dismissed" into the brief as a task with the same id and title, even if you have nothing to add.
+- "notes": things I wrote to you about an item from the app, newest last. Read them as instructions or context for that item.
