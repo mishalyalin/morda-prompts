@@ -43,8 +43,8 @@ Show the loops people forget, not only urgent ones: a session that ended with a 
 - `claude` items: one per active session or project; the title says what Claude is doing or finished, e.g. "Drafting the supplier agreement". Close it with `done: true` when finished.
 
 ## 6. Keep the list true
-- Send only new, changed and finished items; leave unchanged ones out. At most 100 per call.
-- Close an item with `done: true` when you see it finished, or `drop: true` when it is no longer needed. Close `claude` items when the work ends.
+- Send only new, changed and finished items; leave unchanged ones out. For a change, send the key and only the fields that changed: fields you leave out stay as they are. At most 100 per call.
+- Close an item with `{"key": ..., "done": true}` when you see it finished, or `{"key": ..., "drop": true}` when it is no longer needed. Close `claude` items when the work ends.
 - Never send again an item the person closed (status `done` or `dropped`), under any key.
 - Items with `typed_by_person: true` (keys starting `me:`) were typed by the person. You may only close them with `done: true`.
 - If an item has no new evidence for 21 days, drop it unless it has a future `due`.
