@@ -144,3 +144,11 @@ test("no long dashes, no home paths, no secrets-looking tokens", () => {
     assert.deepEqual(tokens, [], `${f} contains a base64url-looking token`);
   }
 });
+
+test("v6 connector prompts: setup names every step, update keeps the person's decisions", () => {
+  const setup = read("connector/setup.md");
+  for (const s of ["get_my_list", "update_my_list", "every hour", "report_hourly"]) assert.ok(setup.includes(s), s);
+  const update = read("connector/update.md");
+  assert.ok(update.includes("Never send again a task the person closed"));
+  assert.ok(update.includes("Keys starting `me:`"));
+});

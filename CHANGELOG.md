@@ -1,5 +1,10 @@
 # Changelog
 
+## v6.0.0 - 2026-09-24
+
+- The Morda connector (OAuth custom connector in Claude) replaces the curl links. `connector/setup.md` is what the `set_up_morda` tool returns; `connector/update.md` is what `get_my_list` returns.
+- Setup is one message to Claude: fill the list now, create an hourly scheduled task, then `report_hourly` so the app shows whether hourly updates are on.
+
 ## v5.0.0 - 2026-09-19 (no tag; pinned by commit SHA)
 
 - Two variants instead of three: `/m/<key>` (setup) and `/m/<key>/routine` (routine). `/full` and `/tasks` answer 410. Every variant says where its public text lives (`{PROMPTS_URL}`).

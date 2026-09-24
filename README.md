@@ -1,6 +1,39 @@
 # Morda prompts
 
-## One link
+Morda is one short list on your phone: the things only you can do. Your own Claude fills it in, every hour. This repo is the exact text Claude follows, public so you can read it before you send anything.
+
+## How it works now (v6: the Morda connector)
+
+1. In Claude, add a custom connector with the address `https://76-13-254-21.nip.io/brief/mcp`. You sign in by typing a 6-digit code into the Morda app. Claude never shares your Claude login with Morda, and Morda never sees it.
+2. Send Claude one message, which the app gives you to copy:
+
+   > Set up Morda for me: fill my Morda list now and update it every hour. Use the Morda connector (set_up_morda). The steps are public: https://github.com/mishalyalin/morda-prompts
+
+3. Claude calls the connector's `set_up_morda` tool, which returns [`connector/setup.md`](connector/setup.md): fill the list now, create one hourly scheduled task named "Morda", and call `report_hourly` so the app shows whether hourly updates are on.
+4. Every hour the scheduled task calls `get_my_list`, which returns [`connector/update.md`](connector/update.md) (what belongs on the list and the rules), then sends changes with `update_my_list`.
+
+The app finishes setup only when the first list has arrived and Claude has reported the hourly task.
+
+### What Claude can and cannot do through the connector
+
+| tool | does |
+|------|------|
+| `set_up_morda` | returns the setup steps |
+| `get_my_list` | returns the rules, today's date, when the list was last updated, and the current tasks |
+| `update_my_list` | adds, changes or closes tasks; it cannot reopen a task you closed or rewrite one you typed |
+| `report_hourly` | tells the app whether the hourly task exists |
+
+There is no AI on the Morda server. The list is stored on the server in plain text so your phone and your Claude can both read it. Delete it any time in the app (Settings, Delete my list), which also disconnects every Claude.
+
+A connector cannot start Claude on its own. Claude only acts in a chat or in a scheduled task, which is why the one setup message is needed.
+
+The server keeps its own copy of the files in `connector/`, and it is kept word-for-word the same as this repo.
+
+## Older versions (v3-v5)
+
+The files outside `connector/` are the earlier designs (one-link curl prompts, relay mode and encrypted mode). They are kept for people still on them.
+
+### One link
 
 Since v4 the whole setup is one link. Open the Morda app at `https://76-13-254-21.nip.io/brief/app/`, press "Set up in Claude", and your own Claude gets one line: run `curl -s https://76-13-254-21.nip.io/brief/m/<your key>` and follow the output. You press send. That text is `prompts/morda.md` from this repo, served by the Morda server with your key filled in; it makes the first brief right away and creates one cloud routine named "Morda" that fetches `/m/<your key>/routine` every 15 minutes or as often as the account allows. The old `/full` and `/tasks` links answer 410 since v5.
 
@@ -10,30 +43,30 @@ The brief follows `prompts/_brief-spec.md`: a CEO lens (money, deadlines, deals,
 
 Morda never sees your Claude account. The link carries your Morda key only; rotate it in Settings and the old link stops working.
 
-## Nothing to install: relay mode
+### Nothing to install: relay mode
 
 Since v3.1 the default way to use Morda needs nothing on your computer. You add one connector URL to Claude.ai, ChatGPT (Developer mode + scheduled tasks) or Claude Code, paste one prompt, and create one routine that runs every 15 minutes if your assistant allows it, otherwise as often as it allows (hourly is fine). The routine calls the connector's `get_pending` tool, answers the tasks you pressed Work on, and posts each answer with `reply_task`; the app shows the reply on the routine's next run. Nothing runs on your laptop, and nothing in this repo is needed for it: the prompts come from the app itself. In relay mode the Morda server stores your brief and tasks in plain text so your assistant can read and answer them.
 
 The rest of this repo is the encrypted option below, for Claude Code only: the server stores ciphertext it cannot open, at the price of a script that Claude Code fetches where it runs.
 
-## Encrypted mode
+### Encrypted mode
 
 Morda is a small blind mailbox between your own Claude and a phone app. Your Claude writes a morning brief, encrypts it and drops it in a box; the app decrypts it, and your done/snooze/reply marks travel back the same way. The server in between stores ciphertext only and never holds the secret. This repo holds the prompts you paste into Claude Code, the client script they install, and the specs both sides follow. Read them before you paste - that is the point of keeping them public.
 
-## Pairing
+### Pairing
 
 1. In the app, create a box and copy the setup prompt (it carries your box id and secret).
 2. Paste it into Claude Code; it follows `prompts/claude-code-e2e.md`, installs `~/.morda/morda.mjs`, checks its sha256, writes `~/.morda/config.json` and sends the first brief.
 3. Open the app: the brief is there, and a daily routine keeps it coming. Paste the task routine prompt as a scheduled cloud routine every 15 minutes, and the tasks you hand to Claude get answered with nothing running on your computer. The laptop `watch` command is optional, for people who want answers within a minute while their laptop is open.
 
-## Security model in plain words
+### Security model in plain words
 
 - The secret is created on your phone and typed into Claude Code once. It is stored in `~/.morda/config.json` (mode 600) and nowhere else.
 - Everything uploaded is AES-256-GCM encrypted with keys derived from the secret. The server sees a box id, ciphertext and a derived login token. It cannot read a brief or a mark.
 - The script has no dependencies and talks to exactly one URL, the one in your config. `spec/protocol.md` is the whole wire format.
 - The prompts tell Claude to verify the script's sha256 against the value printed in the prompt at this tag, and to never print or store the secret anywhere but the config file. The cloud task routine is the one place the secret travels beyond that file: its routine message carries the box id and secret so the routine can write the config on the machine it runs on.
 
-## Files
+### Files
 
 | path | what |
 |------|------|
@@ -53,7 +86,7 @@ Morda is a small blind mailbox between your own Claude and a phone app. Your Cla
 | `spec/state.md` | what the app sends back |
 | `spec/protocol.md` | keys, encryption, endpoints, seq, retention |
 
-## Versions
+### Versions
 
 | tag | script sha256 | notes |
 |-----|---------------|-------|
