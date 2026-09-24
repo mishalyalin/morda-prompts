@@ -5,12 +5,14 @@ Morda is one short list on your phone: the things only you can do. Your own Clau
 ## How it works now (v6: the Morda connector)
 
 1. In Claude, add a custom connector with the address `https://76-13-254-21.nip.io/brief/mcp`. You sign in by typing a 6-digit code into the Morda app. Claude never shares your Claude login with Morda, and Morda never sees it.
-2. Send Claude one message, which the app gives you to copy:
+2. In a normal Claude chat (not Claude Code, whose auto mode can block sending your list to an outside server), send one message, which the app gives you to copy:
 
    > Set up Morda for me: fill my Morda list now and update it every hour. Use the Morda connector (set_up_morda). The steps are public: https://github.com/mishalyalin/morda-prompts
 
 3. Claude calls the connector's `set_up_morda` tool, which returns [`connector/setup.md`](connector/setup.md): fill the list now, create one hourly scheduled task named "Morda", and call `report_hourly` so the app shows whether hourly updates are on.
 4. Every hour the scheduled task calls `get_my_list`, which returns [`connector/update.md`](connector/update.md) (what belongs on the list and the rules), then sends changes with `update_my_list`.
+
+Claude asks once before it first uses Morda ("Always allow"), and may ask you to confirm the hourly schedule. Those clicks are Claude's own safety steps. After them nothing else is asked: the setup and hourly steps tell Claude not to ask questions, and if something is blocked Claude reports it to the app instead.
 
 The app finishes setup when the first list has arrived and Claude has reported the hourly task, or 2 minutes after the first list if Claude never reports it.
 
