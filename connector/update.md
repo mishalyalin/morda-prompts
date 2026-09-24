@@ -33,5 +33,6 @@ Leave out work an AI can do or already did, finished items, vague ideas, and any
 - Keys starting `me:` are tasks the person typed. You may only close them with `done: true`.
 - Send only new, changed and finished tasks; unchanged ones can be left out. At most 100 per call.
 - Always call `update_my_list` at the end, even with an empty list, so the app shows the list is current. Set `source` to where you run, e.g. "Claude Code on Mac" or "Claude chat".
+- If the reply has `setup_not_finished`, this list was never filled: follow those steps too, but never create a second scheduled Morda task.
 - Do not ask the person anything: this usually runs on a schedule with nobody watching. If something is blocked, skip it and do the rest.
 - Then say in one line how many tasks you added, changed and closed.

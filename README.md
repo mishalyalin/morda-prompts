@@ -12,7 +12,7 @@ Morda is one short list on your phone: the things only you can do. Your own Clau
 3. Claude calls the connector's `set_up_morda` tool, which returns [`connector/setup.md`](connector/setup.md): fill the list now, create one hourly scheduled task named "Morda", and call `report_hourly` so the app shows whether hourly updates are on.
 4. Every hour the scheduled task calls `get_my_list`, which returns [`connector/update.md`](connector/update.md) (what belongs on the list and the rules), then sends changes with `update_my_list`.
 
-Claude asks once before it first uses Morda ("Always allow"), and may ask you to confirm the hourly schedule. Those clicks are Claude's own safety steps. After them nothing else is asked: the setup and hourly steps tell Claude not to ask questions, and if something is blocked Claude reports it to the app instead.
+Claude asks before it first uses each Morda tool ("Always allow"), and may ask you to confirm the hourly schedule. Those clicks are Claude's own safety steps. Morda asks nothing else: the setup and hourly steps tell Claude not to ask questions. If something is blocked, Claude reports it to the app when it can, otherwise it says so in the chat.
 
 The app finishes setup when the first list has arrived and Claude has reported the hourly task, or 2 minutes after the first list if Claude never reports it.
 
