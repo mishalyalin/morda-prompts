@@ -1,5 +1,11 @@
 # Changelog
 
+## v7.0.0 - 2026-09-24
+
+- `connector/update.md` rewritten around open loops: read sessions first, then memory, mail and calendar; sort each candidate (needs you / waiting on others / Claude is on it / notice); look for a later close before keeping an item; never turn a notice into "pay this"; a source sentence behind every item; caps and priorities.
+- New item fields: `kind`, `project`, `step`, `why`, `who`, `since`, `from_title`, `from_link`, `quote`, `drop`.
+- Setup points to Claude Code first (it can read the sessions), a normal chat as the fallback.
+
 ## v6.0.0 - 2026-09-24
 
 - The Morda connector (OAuth custom connector in Claude) replaces the curl links. `connector/setup.md` is what the `set_up_morda` tool returns; `connector/update.md` is what `get_my_list` returns.

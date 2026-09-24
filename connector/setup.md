@@ -11,7 +11,7 @@ Create a scheduled task that runs every hour, if you can create scheduled tasks 
 - How often: every hour
 - Prompt: `Update my Morda list: use the Morda connector - call get_my_list, follow the instructions it returns, then call update_my_list.`
 
-If a scheduled task for Morda already exists, keep it and do not make a second one.
+If you run in Claude Code on the person's computer, use its scheduled tasks: they run while the Claude app is open and catch up when it opens, and they can read the person's sessions. If a scheduled task for Morda already exists where you run, keep it and do not make a second one.
 
 ## 3. Tell the phone
 Call `report_hourly` (skip this if you do not have that tool):

@@ -5,12 +5,12 @@ Morda is one short list on your phone: the things only you can do. Your own Clau
 ## How it works now (v6: the Morda connector)
 
 1. In Claude, add a custom connector with the address `https://76-13-254-21.nip.io/brief/mcp`. You sign in by typing a 6-digit code into the Morda app. Claude never shares your Claude login with Morda, and Morda never sees it.
-2. In a normal Claude chat (not Claude Code, whose auto mode can block sending your list to an outside server), send one message, which the app gives you to copy:
+2. In Claude Code on your computer (best: there Claude can read all your sessions) or in a normal Claude chat, send one message, which the app gives you to copy. If Claude Code's auto mode blocks sending your list, use a chat:
 
    > Set up Morda for me: fill my Morda list now and update it every hour. Use the Morda connector (set_up_morda). The steps are public: https://github.com/mishalyalin/morda-prompts
 
 3. Claude calls the connector's `set_up_morda` tool, which returns [`connector/setup.md`](connector/setup.md): fill the list now, create one hourly scheduled task named "Morda", and call `report_hourly` so the app shows whether hourly updates are on.
-4. Every hour the scheduled task calls `get_my_list`, which returns [`connector/update.md`](connector/update.md) (what belongs on the list and the rules), then sends changes with `update_my_list`.
+4. Every hour the scheduled task calls `get_my_list`, which returns [`connector/update.md`](connector/update.md): read your sessions, memory, mail and calendar; sort each open loop (needs you / waiting on others / Claude is on it); check for a later close before keeping anything; write each item as the next concrete action with where it came from. Then it sends changes with `update_my_list`.
 
 Claude asks before it first uses each Morda tool ("Always allow"), and may ask you to confirm the hourly schedule. Those clicks are Claude's own safety steps. Morda asks nothing else: the setup and hourly steps tell Claude not to ask questions. If something is blocked, Claude reports it to the app when it can, otherwise it says so in the chat.
 
@@ -22,7 +22,7 @@ The app finishes setup when the first list has arrived and Claude has reported t
 |------|------|
 | `set_up_morda` | returns the setup steps |
 | `get_my_list` | returns the rules, today's date, when the list was last updated, and the current tasks |
-| `update_my_list` | adds, changes or closes tasks; it cannot reopen a task you closed or rewrite one you typed |
+| `update_my_list` | adds, changes or closes items: what needs you (with project steps), what waits on others, what Claude is working on; each item says where Claude saw it; it cannot reopen an item you closed or rewrite one you typed |
 | `report_hourly` | tells the app whether the hourly task exists |
 
 There is no AI on the Morda server. The list is stored on the server in plain text so your phone and your Claude can both read it. Delete it any time in the app (Settings, Delete my list), which also disconnects every Claude.
