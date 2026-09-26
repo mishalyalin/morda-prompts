@@ -4,7 +4,7 @@ Morda is one short list on your phone: the things only you can do. Your own Clau
 
 ## How it works now (v7: the Morda connector)
 
-1. In Claude, add a custom connector with the address `https://76-13-254-21.nip.io/brief/mcp`. You sign in by typing a 6-digit code into the Morda app. Claude never shares your Claude login with Morda, and Morda never sees it.
+1. In Claude, add a custom connector with the address `https://morda.app/mcp`. You sign in by typing a 6-digit code into the Morda app. Claude never shares your Claude login with Morda, and Morda never sees it.
 2. In Claude Code on your computer (best: there Claude can read all your sessions) or in a normal Claude chat, send one message, which the app gives you to copy. If Claude Code's auto mode blocks sending your list, use a chat:
 
    > Set up Morda for me: fill my Morda list now and update it every hour. Use the Morda connector (set_up_morda). The steps are public: https://github.com/mishalyalin/morda-prompts
