@@ -176,8 +176,9 @@ def question_in(answer: str) -> str:
     tail = paras[-3:] if len(paras[-1]) < 20 else paras[-1:]
     last = " ".join(tail)
     # a "?" inside a link or a piece of code is not a question
-    plain = re.sub(r"https?://\S+|`[^`]*`", " ", last)
-    if not re.search(r"\?(?=[\s\"')\]]|$)", plain[-600:]):
+    # (a link ends on its last letter, so "...example?" still counts as a question)
+    plain = re.sub(r"https?://\S*[^\s?!.,;:)\]]|`[^`]*`", " ", last)
+    if not re.search(r"\?(?=[\s\"'\u201d\u00bb)\]*_]|$)", plain[-600:]):
         return ""
     last = re.sub(r"[*`#>]+", "", last)
     last = " ".join(last.split())
@@ -259,7 +260,8 @@ def flush() -> None:
         except OSError:
             return
         for _ in range(20):
-            files = sorted(f for f in SPOOL.glob("*.json")) if SPOOL.exists() else []
+            # only finished files: names start with a digit; ".name" is one still being written
+            files = sorted(SPOOL.glob("[0-9]*.json")) if SPOOL.exists() else []
             for old in files[:-SPOOL_MAX] if len(files) > SPOOL_MAX else []:
                 old.unlink(missing_ok=True)
             files = files[-SPOOL_MAX:][:200]
