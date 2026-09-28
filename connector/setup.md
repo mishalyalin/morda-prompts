@@ -45,7 +45,7 @@ Call `report_setup`:
 If a safety check stops step 2, 3 or 4 (for example Claude runs in auto mode and refuses it), never try it another way. Instead:
 1. Do every step that is not blocked.
 2. Call `report_setup` with what worked and `where`: "blocked: switch to Manual".
-3. Tell the person in one line: "Switch the mode next to Send to Manual, then send: go on".
+3. Tell the person in one line: "Switch the mode under the message box to Manual (or press Cmd+Shift+M), then send: go on".
 4. When they send it, redo only the blocked steps. Click-to-Allow prompts are expected. Then call `report_setup` again.
 
 ## At the end
