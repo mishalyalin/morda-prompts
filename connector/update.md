@@ -25,6 +25,8 @@ Search everything dated after the evidence: sent mail, later sessions, memory an
 ## 4. What belongs on the list
 Only open loops. For `you` items: things only the person can do, such as a decision or approval, a click in an admin panel, a login, a payment, a signature, an upload, a reply, a call, a meeting, anything physical. Leave out work an AI can do, vague ideas, and anything you cannot back with a sentence from a source. Never put passwords, card or account numbers, codes or keys into an item.
 
+Questions a Claude chat on the person's Mac is asking them already reach the phone by themselves. Do not make items for those.
+
 Show the loops people forget, not only urgent ones: a session that ended with a plan for the person and then went quiet for days is exactly what Morda is for.
 
 ## 5. How to write an item
@@ -41,6 +43,8 @@ Show the loops people forget, not only urgent ones: a session that ended with a 
 - `from_title` and `from_link`: where you saw it: the session title and its link, or the email subject. Always fill `from_title`.
 - `quote`: the sentence from the source that the item rests on, under 300 characters.
 - `claude` items: one per active session or project; the title says what Claude is doing or finished, e.g. "Drafting the supplier agreement". Close it with `done: true` when finished.
+- `effort_min` and `effort_steps` (for `you` items): how long it takes the person, and their own steps in order, each under 120 characters. Count only what the person does with their own hands and head: find a document, log in, pay, sign, call, decide, take a photo. Never count your work or any AI's work. Merging a finished pull request is 1 minute and one step. Setting up a shop account can be 40 minutes over several days: "Put money into the new account", "Find a utility bill from the last 3 months", "Download a bank statement", "Photograph the box". If you cannot tell, leave both out.
+- Never set or guess how important an item is: the person marks that on the phone.
 
 ## 6. Keep the list true
 - Send only new, changed and finished items; leave unchanged ones out. For a change, send the key and only the fields that changed: fields you leave out stay as they are. At most 100 per call.

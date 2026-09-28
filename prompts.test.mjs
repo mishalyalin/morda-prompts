@@ -145,13 +145,19 @@ test("no long dashes, no home paths, no secrets-looking tokens", () => {
   }
 });
 
-test("v6 connector prompts: setup names every step, update keeps the person's decisions", () => {
+test("v8 connector prompts: setup names every step, update keeps the person's decisions", () => {
   const setup = read("connector/setup.md");
-  for (const s of ["get_my_list", "update_my_list", "every hour", "report_hourly"]) assert.ok(setup.includes(s), s);
+  for (const s of ["get_my_list", "update_my_list", "every 15 minutes", "report_setup", "{{KEY}}", "{{SHA}}", "morda_mac.py check"]) assert.ok(setup.includes(s), s);
+  assert.ok(setup.includes("never repeat it"), "the helper key stays private");
+  const helper = read("connector/morda_mac.py");
+  assert.ok(!helper.includes(".codex") && !helper.includes("auth.json"), "the helper never reads other apps' logins");
+  assert.ok(helper.includes("never what"), "the helper says it never sends what the person typed");
   const update = read("connector/update.md");
   assert.ok(update.includes("Never send again an item the person closed"));
   assert.ok(update.includes("keys starting `me:`"));
   assert.ok(update.includes("Never turn a notice into"));
   assert.ok(update.includes("look for a later close"));
   assert.ok(update.includes("Do not ask the person anything"));
+  assert.ok(update.includes("Never count your work or any AI's work"));
+  assert.ok(update.includes("Never set or guess how important an item is"));
 });

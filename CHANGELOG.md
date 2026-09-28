@@ -1,5 +1,12 @@
 # Changelog
 
+## v8.0.0 - 2026-09-28
+
+- Claude on your Mac: `connector/setup.md` now installs a small helper (`connector/morda_mac.py`, Python standard library, sha256-checked) as Claude Code hooks, and a "Morda" scheduled task every 15 minutes. The helper reports chat names, folder names and Claude's questions; never what the person typed.
+- Answers typed on the phone reach the right chat through the Morda task (ListAgents + SendMessage), with an acknowledgement back to the app.
+- `report_setup` replaces `report_hourly` (kept for old tool lists).
+- `connector/update.md`: `effort_min` and `effort_steps` count only the person's own minutes and steps, never the AI's work; Claude never guesses importance (the person marks it); questions from chats on the Mac are not made into items.
+
 ## v7.0.0 - 2026-09-24
 
 - `connector/update.md` rewritten around open loops: read sessions first, then memory, mail and calendar; sort each candidate (needs you / waiting on others / Claude is on it / notice); look for a later close before keeping an item; never turn a notice into "pay this"; a source sentence behind every item; caps and priorities.
