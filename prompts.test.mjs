@@ -147,11 +147,11 @@ test("no long dashes, no home paths, no secrets-looking tokens", () => {
 
 test("v8 connector prompts: setup names every step, update keeps the person's decisions", () => {
   const setup = read("connector/setup.md");
-  for (const s of ["get_my_list", "update_my_list", "every 15 minutes", "report_setup", "{{KEY}}", "{{SHA}}", "morda_mac.py check"]) assert.ok(setup.includes(s), s);
-  assert.ok(setup.includes("never repeat it"), "the helper key stays private");
-  const helper = read("connector/morda_mac.py");
-  assert.ok(!helper.includes(".codex") && !helper.includes("auth.json"), "the helper never reads other apps' logins");
-  assert.ok(helper.includes("never what"), "the helper says it never sends what the person typed");
+  for (const s of ["get_my_list", "update_my_list", "every 15 minutes", "report_setup", "report_chats", "ack_reply",
+    "{{KEY}}", "{{BASE}}/v8/hooks/claude", '"type": "http"', "mcp__<name>", "Manual"]) assert.ok(setup.includes(s), s);
+  assert.ok(setup.includes("never repeat it"), "the hook key stays private");
+  for (const s of ["curl", "python3", "morda_mac", ".codex", "auth.json", "UserPromptSubmit"]) assert.ok(!setup.includes(s), `nothing downloaded or run: ${s}`);
+  assert.ok(setup.includes("never try it another way"), "a blocked step is never worked around");
   const update = read("connector/update.md");
   assert.ok(update.includes("Never send again an item the person closed"));
   assert.ok(update.includes("keys starting `me:`"));

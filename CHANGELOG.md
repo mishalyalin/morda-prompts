@@ -1,5 +1,14 @@
 # Changelog
 
+## v8.1.0 - 2026-09-28
+
+- Nothing is downloaded or run on your Mac any more. `connector/morda_mac.py` is gone. Claude Code now tells Morda about your chats with its own built-in http hooks (Stop, Notification, SessionEnd) that post to `https://morda.app/v8/hooks/claude`. Morda keeps only the chat id, its folder name and Claude's question; the rest of each hook is dropped on arrival.
+- What you type is never sent: there is no hook on your prompts.
+- Setup adds two allow rules to `~/.claude/settings.json`: read `~/.claude/sessions/`, and the Morda connector's own tools. The Morda task then runs without stopping for approval.
+- The Morda task reads `~/.claude/sessions/` and calls the new tools `report_chats` (which chats are open, busy or idle) and `ack_reply` (after it hands your answer to a chat with SendMessage).
+- Setup runs in Manual mode, so Claude asks you before it edits the settings file and you click Allow. If a safety check blocks a step, Claude never tries another way: it tells the app, and the app tells you to switch to Manual and send "go on".
+- A chat shows in the app once the Morda task has seen it, so scheduled runs never show up as chats.
+
 ## v8.0.0 - 2026-09-28
 
 - Claude on your Mac: `connector/setup.md` now installs a small helper (`connector/morda_mac.py`, Python standard library, sha256-checked) as Claude Code hooks, and a "Morda" scheduled task every 15 minutes. The helper reports chat names, folder names and Claude's questions; never what the person typed.

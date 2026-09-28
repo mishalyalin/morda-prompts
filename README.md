@@ -1,39 +1,41 @@
 # Morda prompts
 
-Morda is one phone screen for everything your Claude is doing for you: which chats are waiting for your answer, what is running, what finished, and the short list of things only you can do. You answer from the phone; your Claude gets the answer. This repo is the exact text your Claude follows and the exact helper it installs, public so you can read them before you send anything.
+Morda is one phone screen for everything your Claude is doing for you: which chats are waiting for your answer, what is running, what finished, and the short list of things only you can do. You answer from the phone; your Claude gets the answer. This repo is the exact text your Claude follows, public so you can read it before you send anything.
 
-## How it works now (v8: Claude on your Mac)
+## How it works now (v8.1: Claude on your Mac, nothing to install)
 
 1. Get the Morda app and tap **Connect Claude**. In the Claude app on your Mac, add a custom connector with the address `https://morda.app/mcp`. You sign in by typing a 6-digit code into the Morda app. Claude never shares your Claude login with Morda, and Morda never sees it.
-2. In the Claude app on your Mac, open Code, start a new session, and send the message the app gives you:
+2. In the Claude app on your Mac, open Code, start a new session, set the mode next to Send to **Manual**, and send the message the app gives you:
 
    > Set up Morda for me.
 
-   Claude finds the steps through the Morda connector (`set_up_morda`).
-
-3. Claude calls `set_up_morda`, which returns [`connector/setup.md`](connector/setup.md), and does four things:
+3. Claude calls `set_up_morda`, which returns [`connector/setup.md`](connector/setup.md), and:
+   - adds Claude Code's own http hooks for Stop, Notification and SessionEnd to `~/.claude/settings.json`, pointing at `https://morda.app/v8/hooks/claude` with a private key, plus two allow rules: read `~/.claude/sessions/`, and the Morda connector's tools (Claude asks, you click Allow);
    - fills your list now (`get_my_list`, then `update_my_list`);
-   - downloads the helper [`connector/morda_mac.py`](connector/morda_mac.py), checks its sha256, and adds it to Claude Code's hooks in `~/.claude/settings.json` (Claude may ask you to click Allow once);
    - creates one scheduled task named "Morda" that runs every 15 minutes;
-   - tells the app how it went (`report_setup`).
-4. From then on the helper tells Morda, the moment it happens, when a chat starts, gets a message, finishes or asks you something. It sends only the chat's name, its folder name and Claude's question (cut to 400 characters, anything that looks like a password, key or card number hidden). Never what you typed, your files or your chats.
-5. Every 15 minutes the Morda task says your Mac is awake, catches anything a hook missed, and hands the answers you typed on the phone to the right chat. Once an hour it also refreshes your list of things only you can do ([`connector/update.md`](connector/update.md)).
+   - tells the app how it went (`report_setup`). The app ticks each step, and shows "OK, I'm ready" when Claude is done.
+4. From then on Claude Code tells Morda, the moment it happens, when a chat finishes, asks you something or waits for your OK. Morda keeps only the chat id, its folder name and Claude's question (cut to 400 characters, anything that looks like a password, key or card number hidden). Everything else in the hook is dropped on arrival. There is no hook on what you type.
+5. Every 15 minutes the Morda task reads the list of open chats (names, busy or idle), sends it with `report_chats`, hands the answers you typed on the phone to the right chat with SendMessage, and confirms each with `ack_reply`. Once an hour it also refreshes your list of things only you can do ([`connector/update.md`](connector/update.md)). A chat shows in the app once the Morda task has seen it, so scheduled runs never show up as chats.
 
-When your Mac is asleep or the Claude app is closed, the phone says so and keeps your answers until the Mac is back.
+Nothing is downloaded or run on your Mac. When your Mac is asleep or the Claude app is closed, the phone says so and keeps your answers until the Mac is back.
+
+If a safety check blocks a step, Claude never tries another way. It tells the app, and the app tells you what to do: set the mode to Manual and send "go on".
 
 ### What Claude can and cannot do through the connector
 
 | tool | does |
 |------|------|
-| `set_up_morda` | returns the setup steps, with a new private key for the helper on your Mac |
+| `set_up_morda` | returns the setup steps, with a new private key for the hooks on your Mac |
 | `get_my_list` | returns the rules, today's date, when the list was last updated, and the current items |
 | `update_my_list` | adds, changes or closes items; each says where Claude saw it and how many minutes of your own time it takes; it cannot reopen an item you closed, rewrite one you typed, or touch your marks and pins |
-| `report_setup` | tells the app whether the helper and the Morda task are on |
+| `report_chats` | the Morda task: which chats are open; returns your answers to hand over |
+| `ack_reply` | the Morda task: an answer was handed to its chat, or the chat is closed |
+| `report_setup` | tells the app whether the hooks and the Morda task are on |
 | `report_hourly` | older setup's report, kept for Claudes that still have the old tool list |
 
-The helper's key can only report chat facts and collect your answers. It cannot read your list. There is no AI on the Morda server. For now everything is stored in plain text so it is easy to fix; it will be encrypted before Morda is released. Delete everything any time in the app (Settings, Delete my list), which also disconnects every Claude.
+The hook key can only report chat facts. It cannot read your list or your answers. There is no AI on the Morda server. For now everything is stored in plain text so it is easy to fix; it will be encrypted before Morda is released. Delete everything any time in the app (Settings, Delete my list), which also disconnects every Claude.
 
-To remove the helper: delete `~/.claude/morda` and the lines with `morda_mac.py` in `~/.claude/settings.json`, and delete the "Morda" scheduled task.
+To remove Morda from your Mac: delete the entries with `morda.app/v8/hooks/claude` and the two Morda allow rules in `~/.claude/settings.json`, and delete the "Morda" scheduled task.
 
 The server keeps its own copy of the files in `connector/`, and it is kept word-for-word the same as this repo.
 
