@@ -8,11 +8,11 @@ Call `get_my_list`, follow the instructions it returns, then call `update_my_lis
 ## 2. Let Morda see the Claude chats on this Mac
 Only if you run in Claude Code on the person's Mac and can run shell commands. Anywhere else, skip to step 4.
 
-a) Run this and compare the sum it prints with `{{SHA}}`:
-   `mkdir -p ~/.claude/morda && curl -fsS {{BASE}}/v8/mac/morda_mac.py -o ~/.claude/morda/morda_mac.py && shasum -a 256 ~/.claude/morda/morda_mac.py`
-   If the sum is different, delete that file and skip steps 2 and 3.
+a) Run this. It prints two sums: the helper from Morda and the public copy on GitHub.
+   `mkdir -p ~/.claude/morda && curl -fsS {{BASE}}/v8/mac/morda_mac.py -o ~/.claude/morda/morda_mac.py && shasum -a 256 ~/.claude/morda/morda_mac.py && curl -fsS https://raw.githubusercontent.com/mishalyalin/morda-prompts/main/connector/morda_mac.py | shasum -a 256`
+   Both sums must be `{{SHA}}`. If either is different, delete `~/.claude/morda` and skip steps 2 and 3.
 b) Run: `python3 ~/.claude/morda/morda_mac.py install --key {{KEY}} --base {{BASE}}`
-   It prints `add_to_settings_json_hooks`. The key is private: never repeat it in your answers.
+   The key is private: never repeat it in your answers. If it prints `"ok": false`, delete `~/.claude/morda` and skip the rest of step 2 and step 3. Otherwise it prints `add_to_settings_json_hooks`.
 c) Add those hooks to `~/.claude/settings.json`: under `"hooks"`, append each entry to the list for its event. Keep everything already in the file exactly as it is. If an entry for `morda_mac.py` is already there, keep one.
 d) Run `python3 ~/.claude/morda/morda_mac.py check`. `missing` must be empty.
 

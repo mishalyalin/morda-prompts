@@ -29,24 +29,29 @@ VERSION = "8.0.0"
 HOME = Path.home()
 DIR = HOME / ".claude" / "morda"
 CONFIG = DIR / "config.json"
-SPOOL = DIR / "spool.jsonl"
+SPOOL = DIR / "spool"          # one small file per event, so a send never loses one written meanwhile
 LOCK = DIR / "spool.lock"
 SKIP = DIR / "skip.json"
+PENDING = DIR / "pending.json"  # chats waiting for the person's OK at the Mac
+MARKER = "morda_mac.py tick"    # the Morda task's own prompt; its runs are not the person's chats
+SPOOL_MAX = 2000
 SESSIONS = HOME / ".claude" / "sessions"
-HOOK_EVENTS = ("SessionStart", "UserPromptSubmit", "Stop", "Notification", "SessionEnd")
+HOOK_EVENTS = ("UserPromptSubmit", "Stop", "Notification", "PostToolUse", "SessionEnd")
 ASK_CHARS = 400
 TAIL_BYTES = 256 * 1024
 
 SECRETS = [
-    re.compile(r"\b(?:sk|pk|rk)-[A-Za-z0-9_\-]{16,}"),
-    re.compile(r"\b(?:ghp|gho|ghu|ghs|github_pat)_[A-Za-z0-9_]{20,}"),
+    re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)"),
+    re.compile(r"\b(?:sk|pk|rk)[-_](?:live_|test_|proj-|ant-)?[A-Za-z0-9_\-]{16,}"),
+    re.compile(r"\b(?:ghp|gho|ghu|ghs|ghr|github_pat)_[A-Za-z0-9_]{20,}"),
     re.compile(r"\bxox[abprs]-[A-Za-z0-9\-]{10,}"),
     re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
-    re.compile(r"\b(?:ma|mk|mat|mrt|mh)_[A-Za-z0-9_\-]{16,}"),
+    re.compile(r"\bAIza[0-9A-Za-z_\-]{30,}"),
+    re.compile(r"\b(?:ma|mk|mat|mrt|mh|shpat|shpss|whsec)_[A-Za-z0-9_\-]{16,}"),
     re.compile(r"\beyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{5,}"),
     re.compile(r"\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){3,7}(?: ?[A-Z0-9]{1,3})?\b"),
     re.compile(r"\b(?:\d[ \-]?){12,19}\b"),
-    re.compile(r"(?i)\b(password|passwd|pwd|token|secret|api[_ ]?key)\s*[:=]\s*\S+"),
+    re.compile(r"(?i)\b(password|passwd|pwd|passcode|pin|token|secret|api[_ ]?key)\s*(?:is|was|:|=)\s*\S+"),
 ]
 
 
@@ -161,37 +166,60 @@ def first_user_text(path: str) -> str:
 
 
 def question_in(answer: str) -> str:
-    """The question at the end of Claude's answer, if it ends with one. Plain text, short."""
-    text = re.sub(r"```.*?```", " ", answer or "", flags=re.S)
+    """The question at the end of Claude's answer, if it ends with one. Plain text, short, secrets hidden."""
+    text = redact(answer or "")
+    text = re.sub(r"```.*?```", " ", text, flags=re.S)
     paras = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
     if not paras:
         return ""
     # a very short last line ("Which one?") needs the lines just above it to make sense
     tail = paras[-3:] if len(paras[-1]) < 20 else paras[-1:]
     last = " ".join(tail)
-    if "?" not in last[-600:]:
+    # a "?" inside a link or a piece of code is not a question
+    plain = re.sub(r"https?://\S+|`[^`]*`", " ", last)
+    if not re.search(r"\?(?=[\s\"')\]]|$)", plain[-600:]):
         return ""
-    last = re.sub(r"[*_`#>]+", "", last)
+    last = re.sub(r"[*`#>]+", "", last)
     last = " ".join(last.split())
-    last = redact(last)
     return last if len(last) <= ASK_CHARS else last[: ASK_CHARS - 3].rstrip() + "..."
 
 
-def is_morda_chat(sid: str, transcript: str) -> bool:
+def load_flags(path: Path) -> dict:
+    d = load_json(path, {})
+    return d if isinstance(d, dict) else {}
+
+
+def save_flags(path: Path, d: dict) -> None:
+    if len(d) > 2000:
+        d = dict(list(d.items())[-1000:])
+    try:
+        path.write_text(json.dumps(d))
+    except Exception:
+        pass
+
+
+def is_morda_chat(sid: str, transcript: str, prompt: str = "") -> bool:
     """The Morda task's own runs are not the person's chats."""
-    skip = load_json(SKIP, {})
-    if sid in skip:
-        return skip[sid]
-    mine = "morda_mac.py tick" in first_user_text(transcript) if transcript else False
-    if transcript and first_user_text(transcript):
-        skip[sid] = mine
-        if len(skip) > 2000:
-            skip = dict(list(skip.items())[-1000:])
-        try:
-            SKIP.write_text(json.dumps(skip))
-        except Exception:
-            pass
-    return mine
+    skip = load_flags(SKIP)
+    if skip.get(sid):
+        return True
+    first = prompt or (first_user_text(transcript) if transcript else "")
+    if MARKER in first:
+        skip[sid] = True
+        save_flags(SKIP, skip)
+        return True
+    return False
+
+
+def set_pending(sid: str, on: bool) -> bool:
+    """Remember chats waiting for an OK at the Mac. Returns whether it was waiting before."""
+    p = load_flags(PENDING)
+    was = bool(p.pop(sid, False))
+    if on:
+        p[sid] = True
+    if on or was:
+        save_flags(PENDING, p)
+    return was
 
 
 # ---- talking to Morda ----
@@ -211,9 +239,19 @@ def hello() -> dict:
     return {"host": cfg.get("host", "mac"), "name": cfg.get("name") or socket.gethostname(), "version": VERSION}
 
 
+def spool(ev: dict) -> None:
+    SPOOL.mkdir(parents=True, exist_ok=True)
+    name = "%d-%s.json" % (time.time_ns(), os.urandom(3).hex())
+    tmp = SPOOL / ("." + name)
+    tmp.write_text(json.dumps(ev))
+    tmp.rename(SPOOL / name)   # appears whole or not at all
+
+
 def flush() -> None:
-    """Send what the hooks wrote down. One sender at a time; unsent lines wait for the next try."""
+    """Send what the hooks wrote down, oldest first. One sender at a time; a file is removed only
+    after Morda has it, so anything written during a send goes out next time."""
     import fcntl
+    import urllib.error
     DIR.mkdir(parents=True, exist_ok=True)
     with open(LOCK, "w") as lk:
         try:
@@ -221,18 +259,22 @@ def flush() -> None:
         except OSError:
             return
         for _ in range(20):
+            files = sorted(f for f in SPOOL.glob("*.json")) if SPOOL.exists() else []
+            for old in files[:-SPOOL_MAX] if len(files) > SPOOL_MAX else []:
+                old.unlink(missing_ok=True)
+            files = files[-SPOOL_MAX:][:200]
+            if not files:
+                return
+            events = [e for e in (load_json(f, {}) for f in files) if isinstance(e, dict) and e.get("sid")]
             try:
-                lines = SPOOL.read_text().splitlines()
-            except FileNotFoundError:
-                return
-            events = [load_line(x) for x in lines[:200]]
-            events = [e for e in events if e.get("sid")]
-            if events:
-                post("/v8/mac/events", {**hello(), "events": events})
-            rest = lines[200:]
-            SPOOL.write_text("".join(x + "\n" for x in rest[-2000:]))
-            if not rest:
-                return
+                if events:
+                    post("/v8/mac/events", {**hello(), "events": events})
+            except urllib.error.HTTPError as e:
+                if e.code != 401:
+                    raise
+                # the key was replaced or the list deleted: these can never be sent
+            for f in files:
+                f.unlink(missing_ok=True)
 
 
 # ---- commands ----
@@ -245,15 +287,16 @@ def cmd_hook() -> None:
     if not sid or name not in HOOK_EVENTS:
         return
     transcript = d.get("transcript_path") or ""
-    if is_morda_chat(sid, transcript):
+    # the prompt is read here, on the Mac, only to spot the Morda task's own runs; it is never sent
+    if is_morda_chat(sid, transcript, str(d.get("prompt") or "") if name == "UserPromptSubmit" else ""):
         return
     ev = {"sid": sid}
-    if name == "SessionStart":
-        ev["event"] = "start"
-    elif name == "UserPromptSubmit":
+    if name == "UserPromptSubmit":
         ev["event"] = "prompt"          # only that the person wrote; never what
+        set_pending(sid, False)
     elif name == "Stop":
         ev["event"] = "stop"
+        set_pending(sid, False)
         ask = question_in(d.get("last_assistant_message") or last_answer(transcript))
         if ask:
             ev["ask"] = ask
@@ -263,20 +306,25 @@ def cmd_hook() -> None:
         if kind == "permission_prompt" or (not kind and "permission" in msg.lower()):
             ev["event"] = "permission"
             ev["ask"] = redact(" ".join(msg.split()))[:ASK_CHARS] or "Claude is waiting for your OK to go on."
+            set_pending(sid, True)
         elif kind == "idle_prompt":
             ev["event"] = "idle"
         else:
             return
+    elif name == "PostToolUse":
+        # a tool ran: if this chat was waiting for an OK, the person gave it at the Mac
+        if not set_pending(sid, False):
+            return
+        ev["event"] = "resume"
     elif name == "SessionEnd":
         ev["event"] = "end"
+        set_pending(sid, False)
     title = chat_name(sid) or title_from_transcript(transcript)
     if title:
         ev["title"] = title[:120]
     if d.get("cwd"):
         ev["project"] = os.path.basename(str(d["cwd"]).rstrip("/"))[:60]
-    DIR.mkdir(parents=True, exist_ok=True)
-    with open(SPOOL, "a") as fh:
-        fh.write(json.dumps(ev) + "\n")
+    spool(ev)
     # send in the background so Claude never waits on the network
     subprocess.Popen([sys.executable, os.path.abspath(__file__), "send"], stdin=subprocess.DEVNULL,
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True, close_fds=True)
@@ -304,10 +352,11 @@ def cmd_tick() -> None:
         except Exception:
             pass
         mine = ancestors()
+        skip = load_flags(SKIP)
         chats = []
         for c in open_chats():
-            if c.get("pid") in mine:
-                continue  # the Morda task's own chat
+            if c.get("pid") in mine or skip.get(str(c["sessionId"])):
+                continue  # the Morda task's own chats
             sid = str(c["sessionId"])
             chats.append({"sid": sid, "title": str(c.get("name") or "")[:120] or None,
                           "project": os.path.basename(str(c.get("cwd") or "").rstrip("/"))[:60] or None,
@@ -347,10 +396,13 @@ def cmd_install(args: list) -> None:
         name = ""
     cfg.update(key=key, base=base.rstrip("/"), name=name or socket.gethostname(),
                host=cfg.get("host") or "mac-" + os.urandom(4).hex())
-    CONFIG.write_text(json.dumps(cfg, indent=1))
+    os.chmod(DIR, 0o700)
+    fd = os.open(str(CONFIG), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as fh:
+        fh.write(json.dumps(cfg, indent=1))
     os.chmod(CONFIG, 0o600)
     try:
-        post("/v8/mac/tick", {**hello(), "chats": None})
+        post("/v8/mac/tick", {**hello(), "chats": None, "source": "install"})
         reach = True
     except Exception as e:  # noqa: BLE001
         reach = type(e).__name__ + ": " + str(e)[:120]
