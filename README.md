@@ -5,7 +5,7 @@ Morda is one phone screen for everything your Claude is doing for you: which cha
 ## How it works now (v8.1: Claude on your Mac, nothing to install)
 
 1. Get the Morda app and tap **Connect Claude**. In the Claude app on your Mac, add a custom connector with the address `https://morda.app/mcp`. You sign in by typing a 6-digit code into the Morda app. Claude never shares your Claude login with Morda, and Morda never sees it.
-2. In the Claude app on your Mac, open Code, start a new session, set the mode next to Send to **Manual**, and send the message the app gives you:
+2. In the Claude app on your Mac, open Code, start a new session, switch the mode under the message box to **Manual** (or press Cmd+Shift+M), and send the message the app gives you:
 
    > Set up Morda for me.
 
